@@ -1,2 +1,2 @@
-# modelo_mejorado
-Modelo de predicción mejorado
+# modelo_basico
+Modelo de predicción básico

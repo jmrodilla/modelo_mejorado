@@ -1,0 +1,113 @@
+<div>Teachable Machine Image Model</div>
+<button type="button" onclick="init()">Start</button>
+<div id="webcam-container"></div>
+<div id="label-container"></div>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+<script type="text/javascript">
+    // More API functions here:
+    // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/image
+
+    // the link to your model provided by Teachable Machine export panel
+    const URL = "./";
+
+    // Mapeo de clases a URLs de Wikipedia
+    const wikipediaLinks = {
+        "hierbabuena": "https://es.wikipedia.org/wiki/Mentha_spicata",
+        "romero": "https://es.wikipedia.org/wiki/Salvia_rosmarinus"
+    };
+
+    let model, webcam, labelContainer, maxPredictions;
+    let labelElements = []; // Array para guardar referencia a los elementos
+
+    // Load the image model and setup the webcam
+    async function init() {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        // load the model and metadata
+        // Refer to tmImage.loadFromFiles() in the API to support files from a file picker
+        // or files from your local hard drive
+        // Note: the pose library adds "tmImage" object to your window (window.tmImage)
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        // Convenience function to setup a webcam
+        const flip = true; // whether to flip the webcam
+        webcam = new tmImage.Webcam(200, 200, flip); // width, height, flip
+        await webcam.setup(); // request access to the webcam
+        await webcam.play();
+        window.requestAnimationFrame(loop);
+
+        // append elements to the DOM
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+        labelContainer = document.getElementById("label-container");
+        
+        // Crear elementos UNA SOLA VEZ
+        for (let i = 0; i < maxPredictions; i++) {
+            const containerDiv = document.createElement("div");
+            containerDiv.style.marginBottom = "20px";
+            containerDiv.style.padding = "10px";
+            containerDiv.style.border = "1px solid #ccc";
+            containerDiv.style.borderRadius = "5px";
+            
+            const predictionDiv = document.createElement("div");
+            predictionDiv.style.marginBottom = "10px";
+            predictionDiv.style.fontWeight = "bold";
+            
+            const urlDiv = document.createElement("div");
+            urlDiv.style.display = "none";
+            
+            containerDiv.appendChild(predictionDiv);
+            containerDiv.appendChild(urlDiv);
+            labelContainer.appendChild(containerDiv);
+            
+            labelElements.push({
+                container: containerDiv,
+                prediction: predictionDiv,
+                urlDiv: urlDiv
+            });
+        }
+    }
+
+    async function loop() {
+        webcam.update(); // update the webcam frame
+        await predict();
+        window.requestAnimationFrame(loop);
+    }
+
+    // run the webcam image through the image model
+    async function predict() {
+        // predict can take in an image, video or canvas html element
+        const prediction = await model.predict(webcam.canvas);
+        for (let i = 0; i < maxPredictions; i++) {
+            const className = prediction[i].className;
+            const probability = prediction[i].probability;
+            const classPrediction = className + ": " + probability.toFixed(2);
+            
+            // DEBUG: Mostrar nombres exactos de clases en la consola
+            console.log("Clase:", className, "| Probabilidad:", probability.toFixed(2), "| En mapeo:", !!wikipediaLinks[className]);
+            
+            // Actualizar solo el texto de la predicción (sin regenerar el elementos)
+            labelElements[i].prediction.textContent = classPrediction;
+            
+            // Verificar si la probabilidad es superior a 0.70 y existe enlace
+            if (probability > 0.70 && wikipediaLinks[className]) {
+                const url = wikipediaLinks[className];
+                
+                // Solo generar el contenido UNA SOLA VEZ
+                if (labelElements[i].urlDiv.innerHTML === "") {
+                    labelElements[i].urlDiv.innerHTML = `
+                        <div style="margin-top: 10px; padding: 10px; background-color: #f0f0f0; border-radius: 5px;">
+                            <div style="margin-bottom: 8px; font-size: 12px; color: #333;"><strong>Wikipedia:</strong></div>
+                            <a href="${url}" target="_blank" style="display: inline-block; font-size: 12px; color: #0066cc; word-break: break-all; text-decoration: underline; cursor: pointer;">${url}</a>
+                        </div>
+                    `;
+                }
+                labelElements[i].urlDiv.style.display = "block";
+            } else {
+                labelElements[i].urlDiv.style.display = "none";
+            }
+        }
+    }
+</script>
